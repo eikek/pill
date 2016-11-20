@@ -790,6 +790,7 @@ pill {
   }
   cli {
     endpointFile: ${pill.master.dir}"/endpoint"
+    endpoint: ""
     protocol: "http"
   }
 }
@@ -806,6 +807,19 @@ but most servers implement various checks when delivering anonymous
 mail. So it might not work always. For example, the sender address (=
 =mailfrom= in the config) should be some valid email (i.e. that can be
 routed).
+
+The cli uses the endpoint specified either in =pill.cli.endpoint= or
+from the file =pill.cli.endpointFile=, if the former is empty. These
+properties can be overridden in the config file or with system
+properties given to the env variable =PILL_OPTS=. For example to have
+the cli work for the pill master on the host =192.168.1.4=, an alias
+can be used:
+
+#+begin_src shell :exports both
+alias pill-nas='PILL_OPTS="-Dpill.cli.endpoint=http://192.168.1.4:10549" pill'
+#+end_src
+
+
 
 * Logging
 

@@ -40,9 +40,10 @@ package config {
 
   case class LogConfig(level: String, file: Path)
 
-  case class CliConfig(endpointFile: Path, protocol: String) {
+  case class CliConfig(endpointFile: Path, endpoint: String, protocol: String) {
     def endpointFromFile: Either[Exception, Option[String]] =
-      Option(endpointFile)
+      if (endpoint.nonEmpty) Right(Some(endpoint))
+      else Option(endpointFile)
         .filter(_.exists)
         .map(_.contents.flatMap(Ports.splitHostAndPort))
         .map(_.map { case (host, port) => Some(protocol+"://"+host+":"+port) })
