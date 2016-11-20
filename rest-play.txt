@@ -1,0 +1,87 @@
+# -*- restclient -*-
+# use this file with emacs and https://github.com/pashky/restclient.el
+
+:base = http://localhost:11350
+:job = ccd2dd
+
+# get single job
+GET :base/api/jobs/:job
+#
+
+# list all jobs
+GET :base/api/jobs
+#
+
+# upload a new job
+POST :base/api/jobs
+
+{
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": {
+      "args": [],
+      "env" : {}
+    }
+  },
+  "config": {
+    "timer": "2016-*-* 12:00",
+    "mails": [],
+    "errorMail": [],
+    "silent": false,
+    "active": true,
+    "runOnce": false
+  }
+}
+#
+
+# change job config only
+# has a separate endpoint to omit values
+PUT :base/api/jobs/:job/config
+
+{
+  "active": false
+}
+#
+
+# delete a job
+DELETE :base/api/jobs/:job
+#
+
+# get details to a run
+GET :base/api/jobs/:job/runs/3
+#
+
+# get details to the latest run
+GET :base/api/jobs/:job/runs/latest
+#
+
+# get details of all runs
+GET :base/api/jobs/:job/runs
+#
+
+# delete one run
+DELETE :base/api/jobs/:job/runs/1
+#
+
+# delete all runs
+DELETE :base/api/jobs/:job/runs
+#
+
+# delete all but latest 12 runs
+DELETE :base/api/jobs/:job/runs?keep=12
+#
+
+# pause master
+PUT :base/api/master
+Content-Type: application/json
+
+{ "active": false}
+#
+
+# master info
+GET :base/api/master
+#
+
+# shutdown server
+POST :base/api/shutdown
+#

@@ -1,0 +1,826 @@
+#+title: pill
+
+Pill is a simple job scheduler. It could be used as a replacement for
+cron or systemd timers, although it is not as feature-rich. It has a
+REST api and a basic command line interface and it can send job output
+via mail.
+
+I created it, because I wanted something easier to use than cron or
+systemd timers. Sometimes (like on my NAS) there is not even cron (or
+rather its version is incredibly hard to reuse for non-root users…).
+
+It is really simple: The jobs are saved as json files on the file
+system. A “master job” executes itself every minute and runs matching
+jobs.
+
+Example: run ~scrape-site.sh~ each tuesday at 11:00 and 15:00 and
+mail the output to ~me@test.com~:
+
+#+BEGIN_EXAMPLE
+pill new -t 'Tue *-*-* 11,15:00' -m 'me@test.com' ./scrape-site.sh arg1 arg2
+#+END_EXAMPLE
+
+The master server is started if not running already. Then the new job
+is submitted. The timer syntax is a subset of those systemd uses:
+Think of a date like =Mon 2016-10-12 14:35= and replace all parts that
+should always match with a =*= (except weekdays, don't name them if
+they don't matter). Seconds are not possible. Jobs can run at most
+once a minute. Multiple values are separated by a comma.
+
+~-m~ mails output to given email. To only see error, use ~-em~. The
+output is stored unless option ~--silent~ is given.
+
+* Building
+
+Pill is written in Scala and sbt is the build tool used. It needs Java
+8 to run. Creates a zip file containing pill:
+
+#+begin_src shell :exports both
+sbt gen-zip
+#+end_src
+
+The zip can be found in the =target= folder. Unpack it an run the
+=pill= executable.
+
+* REST interface
+
+The master is controlled via a REST interface.
+
+** Posting a new job
+
+#+name: rest-submit
+#+begin_src restclient :exports both :results verbatim
+POST http://localhost:11350/api/jobs
+Content-Type: application/json
+
+{
+  "job" : {
+    "path" : "/home/eike/backup.sh"
+  },
+  "config" : {
+    "timer" : "2016-*-* *:0,30",
+    "mails" : [],
+    "errorMails": [],
+    "runOnce": false,
+    "active": true,
+    "silent": false
+  }
+}
+#+end_src
+
+Responds with the same job added a new id.
+
+#+RESULTS: rest-submit
+#+BEGIN_SRC js
+{
+  "id": "bb7dce",
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": null
+  },
+  "config": {
+    "timer": "2016-*-* *:0,30",
+    "mails": [],
+    "errorMails": [],
+    "runOnce": false,
+    "silent": false,
+    "active": true,
+    "keepRuns": null
+  }
+}
+// POST http://localhost:11350/api/jobs
+// HTTP/1.1 201 Created
+// Content-Type: application/json
+// Content-Length: 192
+// Request duration: 0.066271s
+#+END_SRC
+
+
+
+** List jobs
+
+#+name: list-jobs
+#+begin_src restclient :exports both
+GET http://localhost:11350/api/jobs
+#+end_src
+
+Responses with a json structure containing all jobs.
+
+#+RESULTS: list-jobs
+#+BEGIN_SRC js
+[
+  {
+    "id": "bb7dce",
+    "job": {
+      "path": "/home/eike/backup.sh",
+      "params": null
+    },
+    "config": {
+      "timer": "2016-*-* *:0,30",
+      "mails": [],
+      "errorMails": [],
+      "runOnce": false,
+      "silent": false,
+      "active": true,
+      "keepRuns": null
+    }
+  }
+]
+// GET http://localhost:11350/api/jobs
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 194
+// Request duration: 0.020974s
+#+END_SRC
+
+
+To list just one job, use its id:
+
+#+name: show-job
+#+begin_src restclient :exports both
+GET http://localhost:11350/api/jobs/ccd2dd
+#+end_src
+
+#+RESULTS: show-job
+#+BEGIN_SRC js
+{
+  "id": "ccd2dd",
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": null
+  },
+  "config": {
+    "timer": "2016-*-* *:0,30",
+    "mails": [],
+    "errorMails": [],
+    "runOnce": false,
+    "silent": false,
+    "active": true,
+    "keepRuns": null
+  }
+}
+// GET http://localhost:11350/api/jobs/ccd2dd
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 192
+// Request duration: 0.003744s
+#+END_SRC
+
+** Change a job
+
+You can change just the config to a job:
+
+#+name: change-job-config
+#+begin_src restclient :exports both
+PUT http://localhost:11350/api/jobs/bb7dce/config
+Content-Type: application/json
+
+{ "active": true, "timer": "*-*-* *:*" }
+#+end_src
+
+#+RESULTS: change-job-config
+#+BEGIN_SRC js
+{
+  "id": "bb7dce",
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": null
+  },
+  "config": {
+    "timer": "*-*-* *:*",
+    "mails": [],
+    "errorMails": [],
+    "runOnce": false,
+    "silent": false,
+    "active": true,
+    "keepRuns": null
+  }
+}
+// PUT http://localhost:11350/api/jobs/bb7dce/config
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 186
+// Request duration: 0.007399s
+#+END_SRC
+
+Or change the parameters to a job:
+
+#+name: change-job-params
+#+begin_src restclient :exports both
+PUT http://localhost:11350/api/jobs/bb7dce/params
+Content-Type: application/json
+
+{ "args": [ "arg1", "arg2" ] }
+#+end_src
+
+#+RESULTS: change-job-params
+#+BEGIN_SRC js
+{
+  "id": "bb7dce",
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": {
+      "args": [
+        "arg1",
+        "arg2"
+      ],
+      "env": null,
+      "cwd": null
+    }
+  },
+  "config": {
+    "timer": "*-*-* *:*",
+    "mails": [],
+    "errorMails": [],
+    "runOnce": false,
+    "silent": false,
+    "active": true,
+    "keepRuns": null
+  }
+}
+// PUT http://localhost:11350/api/jobs/bb7dce/params
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 226
+// Request duration: 0.010847s
+#+END_SRC
+
+You can also put a new job to =api/jobs/:id=. Then you must give the
+complete job. The old one will be overridden.
+
+** Get run information
+
+You can see all the output of a job:
+
+#+begin_src restclient :exports both
+GET http://localhost:11350/api/jobs/bb7dce/runs
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+[
+  {
+    "jobId": "bb7dce",
+    "run": 1,
+    "result": {
+      "returnCode": 0,
+      "stdout": "hello world!\n",
+      "stderr": "",
+      "started": "2016-11-20T13:54:49.922Z",
+      "runTime": "PT10.016S",
+      "silent": false
+    }
+  }
+]
+// GET http://localhost:11350/api/jobs/bb7dce/runs
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 166
+// Request duration: 0.018118s
+#+END_SRC
+
+Responses with an array containing the infos of each run. A single run
+can be specified by an index:
+
+#+begin_src restclient :exports both
+GET http://localhost:11350/api/jobs/bb7dce/runs/1
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "jobId": "bb7dce",
+  "run": 1,
+  "result": {
+    "returnCode": 0,
+    "stdout": "hello world!\n",
+    "stderr": "",
+    "started": "2016-11-20T13:54:49.922Z",
+    "runTime": "PT10.016S",
+    "silent": false
+  }
+}
+// GET http://localhost:11350/api/jobs/bb7dce/runs/1
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 164
+// Request duration: 0.004288s
+#+END_SRC
+
+or using ~latest~
+
+#+begin_src restclient :exports both
+GET http://localhost:11350/api/jobs/bb7dce/runs/latest
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "jobId": "bb7dce",
+  "run": 3,
+  "result": {
+    "returnCode": 0,
+    "stdout": "hello world!\n",
+    "stderr": "",
+    "started": "2016-11-20T13:56:49.895Z",
+    "runTime": "PT10.008S",
+    "silent": false
+  }
+}
+// GET http://localhost:11350/api/jobs/bb7dce/runs/latest
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 164
+// Request duration: 0.004496s
+#+END_SRC
+
+** Delete run infos
+
+#+begin_src restclient :exports both
+DELETE http://localhost:11350/api/jobs/bb7dce/runs/3
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "jobId": "bb7dce",
+  "run": 3,
+  "result": {
+    "returnCode": 0,
+    "stdout": "hello world!\n",
+    "stderr": "",
+    "started": "2016-11-20T13:56:49.895Z",
+    "runTime": "PT10.008S",
+    "silent": false
+  }
+}
+// DELETE http://localhost:11350/api/jobs/bb7dce/runs/3
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 164
+// Request duration: 0.012180s
+#+END_SRC
+
+or all
+
+keep last 5 runs:
+
+#+begin_src restclient :exports both
+DELETE http://localhost:11350/api/jobs/bb7dce/runs?keep=5
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "deleted": 0
+}
+// DELETE http://localhost:11350/api/jobs/bb7dce/runs?keep=5
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 13
+// Request duration: 0.014862s
+#+END_SRC
+
+This returns the number of runs deleted.
+
+** Delete a job
+
+#+begin_src restclient :exports both
+DELETE http://localhost:11350/api/jobs/bb7dce
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "id": "bb7dce",
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": {
+      "args": [
+        "arg1",
+        "arg2"
+      ],
+      "env": null,
+      "cwd": null
+    }
+  },
+  "config": {
+    "timer": "*-*-* *:*",
+    "mails": [],
+    "errorMails": [],
+    "runOnce": false,
+    "silent": false,
+    "active": true,
+    "keepRuns": null
+  }
+}
+// DELETE http://localhost:11350/api/jobs/bb7dce
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 226
+// Request duration: 0.007983s
+#+END_SRC
+
+** Pause master job
+
+#+begin_src restclient :exports both
+PUT http://localhost:11350/api/master
+Content-Type: application/json
+
+{ "active": false }
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "active": true
+}
+// PUT http://localhost:11350/api/master
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 15
+// Request duration: 0.002053s
+#+END_SRC
+
+** Master info
+
+#+begin_src restclient :exports both
+GET http://localhost:11350/api/master
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "running": true,
+  "active": true,
+  "started": "2016-11-20T13:59:09.141Z",
+  "name": "ithaka.home",
+  "runningJobs": [],
+  "buildInfo": {
+    "projectName": "pill",
+    "commit": "dirty workingdir @ master/565194c93",
+    "buildTime": "2016-11-20T13:58:55.755Z",
+    "version": "0.0.1-SNAPSHOT",
+    "homepage": "https://github.com/eikek/pill"
+  }
+}
+// GET http://localhost:11350/api/master
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 296
+// Request duration: 0.005046s
+#+END_SRC
+
+** Shutdown master
+
+#+begin_src restclient :exports both
+POST http://localhost:11350/api/shutdown
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "shutdown": true
+}
+// POST http://localhost:11350/api/shutdown
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Connection: close
+// Content-Length: 17
+// Request duration: 0.024957s
+#+END_SRC
+
+Lets the server process exit.
+
+* CLI Usage
+
+The command line interface emits http request to the rest server. If
+no server is up, the ~pill start~ command is initiated automatically.
+
+** Show some help
+
+#+begin_src shell :exports both :results verbatim
+pill help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+pill v0.0.1-SNAPSHOT (dirty workingdir @ master/4919e5541) at 2016-11-19T23:57:37.220Z
+
+… a simple job scheduler. It will execute your scripts periodically.
+It is controlled via REST and a basic command line interface is provided.
+
+Commands:
+- change: Change properties of a scheduled job
+- clean-runs: Free disk space by removing old runs
+- info: Show some info about the master scheduler
+- last: Show details about last run
+- list: List all scheduled jobs
+- new: Schedule a new job
+- pause: Pause the master scheduler
+- rm: Delete a scheduled job
+- run: Show details about any run
+- runs: List the runs of a job
+- show: Show details of a scheduled job
+- start: Starts the master scheduler as daemon in background
+- stop: Stop the master scheduler daemon
+- version: Show the version of the cli client
+
+Each command can be asked for help using `--help'. The source and more
+info is at https://github.com/eikek/pill.
+#+end_example
+
+Help for each command is offered with ~--help~:
+
+#+begin_src shell :exports both :results verbatim
+pill new --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+pill v0.0.1-SNAPSHOT
+
+Schedule a new job
+
+Usage: new [options] <program> [<args...>]
+
+  --help                   Print this help
+  -t, --timer <value>      The timer definition
+  -m, --mail <value>       Mail addresses to notify with job output
+  -em, --error-mail <value>
+                           Mail addresses to notify about error output only
+  --once <value>           Set the `once' flag of a job
+  --silent <value>         Set the `silent' flag of a job
+  --active <value>         Set the `active' flag on a job
+  --keep <value>           How many of the last runs to keep
+  --wd <value>             The job's working directory
+
+Arguments:
+  <program>                The script/program to run (required)
+  <args...>                Arguments to the script
+#+end_example
+
+** Start the server
+
+The rest server can be started by an extra command. Otherwise this
+command is run automatically if no server is up.
+
+#+begin_src shell :exports both
+pill start
+#+end_src
+
+#+RESULTS:
+: Starting server at 0.0.0.0:11350
+
+** submit a job
+
+#+begin_src shell :exports both :results verbatim
+pill new --timer '2016-*-* *:0,30' ~/backup.sh arg1 arg2
+#+end_src
+
+#+RESULTS:
+: Created 320458 running at 2016-*-* *:0,30.
+
+The job id =320458= is used for other commands as argument.
+
+** list scheduled jobs
+
+#+begin_src shell :exports both :results verbatim
+pill list
+#+end_src
+
+#+RESULTS:
+: 320458         2016-*-* *:0,30	/home/eike/backup.sh
+
+** show details of a job
+
+#+begin_src shell :exports both :results verbatim
+pill show 320458
+#+end_src
+
+#+RESULTS:
+#+begin_example
+{
+  "id" : "320458",
+  "job" : {
+    "path" : "/home/eike/backup.sh",
+    "params" : {
+      "args" : [
+        "arg1",
+        "arg2"
+      ],
+      "env" : {
+
+      },
+      "cwd" : null
+    }
+  },
+  "config" : {
+    "timer" : "2016-*-* *:0,30",
+    "mails" : [
+    ],
+    "errorMails" : [
+    ],
+    "runOnce" : false,
+    "silent" : false,
+    "active" : true
+  }
+}
+#+end_example
+
+** changing config of scheduled jobs
+
+The options are the same as with ~new~. Properties are replaced with
+those given to this command.
+
+#+begin_src shell :exports both :results verbatim
+pill change --timer '2016-*-* *:*' 320458
+#+end_src
+
+#+RESULTS:
+: Updated.
+
+** List job runs
+
+#+begin_src shell :exports both :results verbatim
+pill runs 320458
+#+end_src
+
+#+RESULTS:
+: 320458             1   rc=  0  runtime=PT10.007S
+
+Here the job has been run once with exit code 0 and it took 10
+seconds.
+
+** Show details of a job run
+
+#+begin_src shell :exports both :results verbatim
+pill last 320458
+#+end_src
+
+#+RESULTS:
+: --------------------------------------------------------------------------------
+: Job: 320458
+: Run: 2
+: Return code: 0
+: Startet: 2016-11-20T00:02:08.923Z
+: Runtime: PT10.007S
+: Silent: false
+: -------------------------------------stdout-------------------------------------
+: hello world!
+
+The ~last~ command gets details about the last run. This is the second run.
+
+** Show output of any run
+
+#+begin_src shell :exports both :results verbatim
+pill run -n 1 320458
+#+end_src
+
+#+RESULTS:
+: --------------------------------------------------------------------------------
+: Job: 320458
+: Run: 1
+: Return code: 0
+: Startet: 2016-11-20T00:01:08.923Z
+: Runtime: PT10.007S
+: Silent: false
+: -------------------------------------stdout-------------------------------------
+: hello world!
+
+** cleanup runs
+
+If the number of output gets too much, you can delete them by keeping
+the latest ~x~ entries.
+
+#+begin_src shell :exports both :results verbatim
+pill clean-runs --keep 2 320458
+#+end_src
+
+#+RESULTS:
+: {
+:   "deleted" : 0
+: }
+
+** remove a scheduled job
+
+Deletes the job and its runs:
+
+#+begin_src shell :exports both :results verbatim
+pill rm 320458
+#+end_src
+
+#+RESULTS:
+: Deleted job 320458
+
+** print some info
+
+The ~info~ command prints information from the master job (the server).
+
+#+begin_src shell :exports both :results verbatim
+pill info
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Endpoint: http://0.0.0.0:11350/api
+{
+  "running" : true,
+  "active" : true,
+  "started" : "2016-11-19T23:22:08.915Z",
+  "hostname" : "ithaka.home",
+  "runningJobs" : [
+  ],
+  "buildInfo" : {
+    "projectName" : "pill",
+    "commit" : "dirty workingdir @ master/04dd29dfa",
+    "buildTime" : "2016-11-19T22:59:37.108Z",
+    "version" : "0.0.1-SNAPSHOT",
+    "homepage" : "https://github.com/eikek/pill"
+  }
+}
+#+end_example
+
+** Pause all
+
+The master job can be paused.
+
+#+begin_src shell :exports both :results verbatim
+pill pause --active false
+#+end_src
+
+#+RESULTS:
+: {
+:   "active" : true
+: }
+
+It prints the old state.
+* Configuration
+
+The config file is at =$HOME/.config/pill/pill.conf=. It is read by
+the cli and server. Here is the default conf:
+
+#+name: default config
+#+begin_src shell :exports results :results code
+cat src/main/resources/reference.conf
+#+end_src
+
+#+RESULTS: default config
+#+BEGIN_SRC conf
+pill {
+  log {
+    level: "warn"
+    file: ${pill.master.dir}/"pill.log"
+  }
+  master {
+    name: ""
+    dir: ${user.home}"/.config/pill"
+    smtp {
+      host: ""
+      port: 25
+      user: ""
+      password: ""
+      mailfrom: "pill@localhost"
+    }
+
+    http {
+      bindHost: "0.0.0.0"
+      port: 0
+    }
+  }
+  cli {
+    endpointFile: ${pill.master.dir}"/endpoint"
+    protocol: "http"
+  }
+}
+#+END_SRC
+
+
+The [[https://github.com/typesafe/config][config]] library is used. See its documentation for more info.
+
+The smtp settings can be given in the config file. If the host is not
+empty and port > 0, it is used to send mails. Otherwise, the mail
+addresses of the recipients are used to lookup their MX host and mails
+are tried to deliver to this host directly. This works quite often,
+but most servers implement various checks when delivering anonymous
+mail. So it might not work always. For example, the sender address (=
+=mailfrom= in the config) should be some valid email (i.e. that can be
+routed).
+
+* Logging
+
+Pill logs into a log file at =$HOME/.config/pill/pill.log=. The
+location and log level can be changed in the config file or overriden
+via system properties.
+
+For example, to have the server log at debug level:
+
+#+begin_src shell :exports code
+PILL_OPTS="-Dpill.log.level=debug" pill start
+#+end_src
+
+For now, cli and the server log into the same file.
+
+* License
+
+Pill is distributed under the [[http://www.gnu.org/licenses/gpl-3.0.html][GPLv3]].
