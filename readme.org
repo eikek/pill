@@ -1,31 +1,29 @@
 #+title: pill
 
-Pill is a simple job scheduler. It could be used as a replacement for
-cron or systemd timers, although it is not as feature-rich. It has a
-REST api and a basic command line interface and it can send job output
-via mail.
+Pill is a simple job scheduler. It can be used as a replacement for
+cron or systemd timers in many cases, but it is not as feature-rich
+(i.e. no dependency resolution). But it /has/ a REST api, a basic
+command line interface and it can send job output via mail.
 
 I created it, because I wanted something easier to use than cron or
 systemd timers. Sometimes (like on my NAS) there is not even cron (or
-rather its version is incredibly hard to reuse for non-root users…).
-
-It is really simple: The jobs are saved as json files on the file
-system. A “master job” executes itself every minute and runs matching
-jobs.
+rather its version is [[http://jimmybonney.com/articles/manage_crontab_synology/][incredibly hard]] to use…).
 
 Example: run ~scrape-site.sh~ each tuesday at 11:00 and 15:00 and
 mail the output to ~me@test.com~:
 
 #+BEGIN_EXAMPLE
-pill new -t 'Tue *-*-* 11,15:00' -m 'me@test.com' ./scrape-site.sh arg1 arg2
+bash> pill new -t 'Tue *-*-* 11,15:00' -m 'me@test.com' ./scrape-site.sh arg1 arg2
 #+END_EXAMPLE
 
 The master server is started if not running already. Then the new job
-is submitted. The timer syntax is a subset of those systemd uses:
-Think of a date like =Mon 2016-10-12 14:35= and replace all parts that
-should always match with a =*= (except weekdays, don't name them if
-they don't matter). Seconds are not possible. Jobs can run at most
-once a minute. Multiple values are separated by a comma.
+is submitted and runs then periodically.
+
+The timer syntax is a subset of those systemd uses: Think of a date
+like =Mon 2016-10-12 14:35= and replace all parts that should always
+match with a =*= (except weekdays, don't name them if they don't
+matter). Seconds are not possible. Jobs can run at most once a
+minute. Multiple values are separated by a comma.
 
 ~-m~ mails output to given email. To only see error, use ~-em~. The
 output is stored unless option ~--silent~ is given.
@@ -365,9 +363,7 @@ DELETE http://localhost:11350/api/jobs/bb7dce/runs/3
 // Request duration: 0.012180s
 #+END_SRC
 
-or all
-
-keep last 5 runs:
+or all, but keep last 5 runs:
 
 #+begin_src restclient :exports both
 DELETE http://localhost:11350/api/jobs/bb7dce/runs?keep=5
