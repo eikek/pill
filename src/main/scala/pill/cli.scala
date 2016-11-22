@@ -375,7 +375,7 @@ package cli {
       def nRunOpt = opt[Int]('n', "run") required() text ("Select the run to show")
 
       def workingDirOpt = opt[Path]("wd") text("The job's working directory")
-      def envOpt = opt[Map[String, String]]("env") text ("Environment variables used for the job")
+      def envOpt = opt[Map[String, String]]("env").valueName("k1=v1,k2=v2...").text("Environment variables used for the job")
 
       def portOpt = opt[Int]('p', "port") text("The port to use")
       def hostOpt = opt[String]('h', "host") text("The host to bind")
@@ -471,32 +471,16 @@ package cli {
           cfg.copy(change = cfg.change andThen { cfg => cfg.copy(config = cfg.config.copy(keepRuns = Some(n))) })
         }
 
+        envOpt action { (env, cfg)  =>
+          cfg.copy(change = cfg.change andThen { cfg => cfg.changeParams(jp => jp.copy(env = env)) })
+        }
         workingDirOpt action { (p, cfg) =>
-          def update: Option[JobParams] => Option[JobParams] =
-            params => params.map(jp => jp.copy(cwd = Some(p))).orElse(Some(JobParams(cwd = Some(p))))
-          cfg.copy(change = cfg.change andThen { cfg =>
-            cfg.job match {
-              case Script(p, params) =>
-                cfg.copy(job = Script(p, update(params)))
-              case Code(s, params) =>
-                cfg.copy(job = Code(s, update(params)))
-            }
-          })
+          cfg.copy(change = cfg.change andThen { cfg => cfg.changeParams(jp => jp.copy(cwd = Some(p))) })
         }
-
         argsOpt action { (arg, cfg) =>
-          def update: Option[JobParams] => Option[JobParams] =
-            params => params.map(jp => jp.copy(args = arg)).orElse(Some(JobParams(args = arg)))
-
-          cfg.copy(change = cfg.change andThen { cfg =>
-            cfg.job match {
-              case Script(p, params) =>
-                cfg.copy(job = Script(p, update(params)))
-              case Code(p, params) =>
-                cfg.copy(job = Script(p, update(params)))
-            }
-          })
+          cfg.copy(change = cfg.change andThen { cfg => cfg.changeParams(jp => jp.copy(args = arg)) })
         }
+
         note("\nArguments:")
         idArg action { (id, cfg) =>
           cfg.copy(id = id)
@@ -529,16 +513,11 @@ package cli {
         }
         idOpt action { (id, cfg) => cfg.copy(id = id) }
 
-
+        envOpt action { (env, cfg) =>
+          cfg.changeParams(jp => jp.copy(env = env))
+        }
         workingDirOpt action { (p, cfg) =>
-          def update: Option[JobParams] => Option[JobParams] =
-            params => params.map(jp => jp.copy(cwd = Some(p))).orElse(Some(JobParams(cwd = Some(p))))
-          cfg.job match {
-            case Script(p, params) =>
-              cfg.copy(job = Script(p, update(params)))
-            case Code(s, params) =>
-              cfg.copy(job = Code(s, update(params)))
-          }
+          cfg.changeParams(jp => jp.copy(cwd = Some(p)))
         }
 
         note("\nArguments:")
@@ -551,15 +530,7 @@ package cli {
           }
         }
         argsArg action { (arg, cfg) =>
-          def update: Option[JobParams] => Option[JobParams] =
-            params => params.map(jp => jp.copy(args = jp.args :+ arg)).orElse(Some(JobParams(args = Seq(arg))))
-
-          cfg.job match {
-            case Script(p, params) =>
-              cfg.copy(job = Script(p, update(params)))
-            case Code(p, params) =>
-              cfg.copy(job = Script(p, update(params)))
-          }
+          cfg.changeParams(jp => jp.copy(args = jp.args :+ arg))
         }
       }
     }
