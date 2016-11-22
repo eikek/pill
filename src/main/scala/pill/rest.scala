@@ -13,10 +13,10 @@ package rest {
 
     def service(store: JobStore, master: Master, onShutdown: () => Unit) = {
       val endpoint = {
-        jobList(store)      :+: jobDetail(store)       :+: jobParamsChange(store)   :+:
-        jobDelete(store)    :+: jobCreate(store)       :+: runDetail(store)   :+:
-        runList(store)      :+: runDetailLatest(store) :+: runDelete(store)   :+:
-        runDeleteAll(store) :+: masterToggle(master)   :+: masterInfo(master) :+:
+        jobList(store) :+: jobDetail(store) :+: jobParamsChange(store) :+:
+        jobDelete(store) :+: jobNew(store) :+: jobCreate(store) :+: runDetail(store) :+:
+        runList(store) :+: runDetailLatest(store) :+: runDelete(store)   :+:
+        runDeleteAll(store) :+: masterToggle(master) :+: masterInfo(master) :+:
         shutdown(master, onShutdown) :+: jobConfigChange(store)
       }
 
@@ -46,6 +46,15 @@ package rest {
       post("api" :: "jobs" :: postedJob) { in: ScheduledJob =>
         store.save(in)
           .map(_ => Created(in))
+          .valueOr(InternalServerError(_))
+      }
+
+    def jobNew(store: JobStore): Endpoint[ScheduledJob] =
+      post("api" :: "jobs" :: string :: body.as[String => ScheduledJob]) {
+        (id: String, job: String => ScheduledJob) =>
+        val j = job(id)
+        store.create(j)
+          .map(_ => Created(j))
           .valueOr(InternalServerError(_))
       }
 

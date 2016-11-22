@@ -24,7 +24,7 @@ package store {
       final def error[A](msg: String): Result[A] = Left(StoreError(msg))
       final def error[A](ex: Exception): Result[A] = Left(StoreError.fromException(ex))
     }
-
+    def create(job: ScheduledJob): Result[Unit]
     def save(job: ScheduledJob): Result[Unit]
     def load(id: String): Result[Option[ScheduledJob]]
     def delete(id: String): Result[ScheduledJob]
@@ -53,6 +53,15 @@ package store {
 
     private def loadFile[A](p: Path)(implicit d: Decoder[A]) =
       p.contents.flatMap(decode[A]).map(_.some)
+
+    def create(job: ScheduledJob): Result[Unit] = {
+      val target = root / job.id / jobFile
+      for {
+        _ <- mkdir(root)
+        _ <- mkdirAtomic(target.parent)
+        _ <- job.asJson.spaces2 >>: target
+      } yield ()
+    }
 
     def save(job: ScheduledJob): Result[Unit] = {
       val target = root / job.id / jobFile

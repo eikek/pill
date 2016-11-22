@@ -19,6 +19,11 @@ object files {
       Files.createDirectories(p)
     }
 
+  def mkdirAtomic(p: Path): Either[Exception, Unit] =
+    Either.catchOnly[Exception] {
+      Files.createDirectory(p)
+    }
+
   private def newFilter(f: Path => Boolean) = new DirectoryStream.Filter[Path] {
     def accept(p: Path) = f(p)
   }

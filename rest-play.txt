@@ -26,13 +26,36 @@ POST :base/api/jobs
   "config": {
     "timer": "2016-*-* 12:00",
     "mails": [],
-    "errorMail": [],
+    "errorMails": [],
     "silent": false,
     "active": true,
     "runOnce": false
   }
 }
 #
+
+# upload a new job with given id
+POST :base/api/jobs/myid
+
+{
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": {
+      "args": [],
+      "env" : {}
+    }
+  },
+  "config": {
+    "timer": "2016-*-* 12:00",
+    "mails": [],
+    "errorMails": [],
+    "silent": false,
+    "active": true,
+    "runOnce": false
+  }
+}
+#
+
 
 # change job config only
 # has a separate endpoint to omit values

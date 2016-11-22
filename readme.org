@@ -70,7 +70,7 @@ Content-Type: application/json
 }
 #+end_src
 
-Responds with the same job added a new id.
+Responds with the same job added a new random id.
 
 #+RESULTS: rest-submit
 #+BEGIN_SRC js
@@ -97,7 +97,54 @@ Responds with the same job added a new id.
 // Request duration: 0.066271s
 #+END_SRC
 
+To use custom ids, use following endpoint:
 
+#+name: rest-submit-id
+#+begin_src restclient :exports both :results verbatim
+POST http://localhost:11350/api/jobs/my-id
+Content-Type: application/json
+
+{
+  "job" : {
+    "path" : "/home/eike/backup.sh"
+  },
+  "config" : {
+    "timer" : "2016-*-* *:0,30",
+    "mails" : [],
+    "errorMails": [],
+    "runOnce": false,
+    "active": true,
+    "silent": false
+  }
+}
+#+end_src
+
+#+RESULTS: rest-submit-id
+#+BEGIN_SRC js
+{
+  "id": "my-id",
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": null
+  },
+  "config": {
+    "timer": "2016-*-* *:0,30",
+    "mails": [],
+    "errorMails": [],
+    "runOnce": false,
+    "silent": false,
+    "active": true,
+    "keepRuns": null
+  }
+}
+// POST http://localhost:11350/api/jobs/my-id
+// HTTP/1.1 201 Created
+// Content-Type: application/json
+// Content-Length: 191
+// Request duration: 0.009716s
+#+END_SRC
+
+This only works if the id doesn't exist yet.
 
 ** List jobs
 
