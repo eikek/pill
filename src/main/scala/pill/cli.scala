@@ -41,6 +41,7 @@ package cli {
   case class JobChange(id: String, change: ScheduledJob => ScheduledJob)
   case class CleanRuns(id: String, keep: Int = 10)
   case class RunSelect(id: String, run: Int = 1)
+  case class Rename(from: String, to: String)
 
   abstract class Command[C](val name: String)(implicit p: OptParser[C]) {
     def init: C
@@ -179,7 +180,7 @@ package cli {
     val initTimer = Timer.parse("2016-11-19 19:00")
     val init = ScheduledJob("", Code("", None), JobConf(initTimer))
     def run(job: ScheduledJob): Unit = {
-      val resp = httpApi("/jobs")
+      val resp = (if (job.id == "") httpApi("/jobs") else httpApi(s"/jobs/${job.id}"))
         .postData(job.asJson.noSpaces)
         .header("content-type", "application/json")
         .asString
@@ -191,6 +192,20 @@ package cli {
             println("Created")
             throw err
         }
+      }
+    }
+  }
+
+  class RenameJobCmd extends Command[Rename]("rename") with RunningServer {
+    val description = "Rename a job"
+    val init = Rename("", "")
+    def run(rename: Rename): Unit = {
+      val resp = httpApi(s"/jobs/${rename.from}/rename")
+        .postData(Id(rename.to).asJson.noSpaces)
+        .header("content-type", "application/json")
+        .asString
+      whenOk(resp) {
+        println(s"Job ${rename.from} is now ${rename.to}")
       }
     }
   }
@@ -371,7 +386,11 @@ package cli {
 
       def keepOpt = opt[Int]("keep") text("How many of the last runs to keep")
       def idArg = arg[String]("<id>").required().text("The job id (required)")
+      def idOpt = opt[String]("id") text("The job id to use. A random one is generated, if omitted")
       def pauseOpt = opt[Boolean]("active") required() text("Pause the master scheduler")
+
+      def fromArg = arg[String]("<from>") required() text ("The job id to rename")
+      def toArg = arg[String]("<to>") required() text ("The new job id")
     }
 
     implicit val _id: OptParser[Id] = OptParser[Id](n => new Parser[Id](n) {
@@ -385,6 +404,13 @@ package cli {
       name => new Parser[HttpSettings](name) {
         portOpt action { (p, cfg) => cfg.copy(port = p) }
         hostOpt action { (h, cfg) => cfg.copy(bindHost = h) }
+      }
+    }
+
+    implicit val _rename: OptParser[Rename] = OptParser[Rename] {
+      name => new Parser[Rename](name) {
+        fromArg action { (id, cfg) => cfg.copy(from = id) }
+        toArg action { (id, cfg) => cfg.copy(to = id) }
       }
     }
 
@@ -501,6 +527,8 @@ package cli {
         keepOpt action { (n, cfg) =>
           cfg.copy(config = cfg.config.copy(keepRuns = Some(n)))
         }
+        idOpt action { (id, cfg) => cfg.copy(id = id) }
+
 
         workingDirOpt action { (p, cfg) =>
           def update: Option[JobParams] => Option[JobParams] =
