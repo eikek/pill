@@ -23,7 +23,8 @@ The timer syntax is a subset of those systemd uses: Think of a date
 like =Mon 2016-10-12 14:35= and replace all parts that should always
 match with a =*= (except weekdays, don't name them if they don't
 matter). Seconds are not possible. Jobs can run at most once a
-minute. Multiple values are separated by a comma.
+minute. Multiple values are separated by a comma. Alternatively, the
+time can be specified by an offset from /now/: ~+10min~ (min, h or d).
 
 ~-m~ mails output to given email. To only see error, use ~-em~. The
 output is stored unless option ~--silent~ is given.

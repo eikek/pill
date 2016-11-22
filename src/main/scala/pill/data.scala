@@ -83,9 +83,27 @@ package data {
       val two: P[String] = CharIn('0' to '9').rep(min=1, max=2).!
       val twos: P[Seq[String]] = P(empty | two.rep(1, sep=","))
 
-      val timer: P[Timer] = P((dows ~" ").? ~ years ~ "-" ~ twos ~"-"~ twos ~" "~ twos ~":"~ twos).map {
+      val offset: P[Duration] = P("+" ~ P(CharIn('0' to '9').rep.!).map(_.toInt) ~ P("min"|"h"|"d"|"m").!).map {
+        case (num, unit) => unit.toLowerCase match {
+          case "h" => Duration.ofHours(num.toLong)
+          case "d" => Duration.ofDays(num.toLong)
+          case "min" => Duration.ofMinutes(num.toLong)
+          case _ => Duration.ofMinutes(num.toLong)
+        }
+      }
+      val offsetTimer: P[Timer] = offset.map { duration =>
+        val now = LocalDateTime.now.plus(duration)
+        Timer(Nil, List(now.getYear.toString),
+          List(now.getMonthValue.toString),
+          List(now.getDayOfMonth.toString),
+          List(now.getHour.toString),
+          List(now.getMinute.toString))
+      }
+
+      val stdTimer: P[Timer] = P((dows ~" ").? ~ years ~ "-" ~ twos ~"-"~ twos ~" "~ twos ~":"~ twos).map {
         case (w, y, m, d, h, min) => Timer(w.map(_.toList).getOrElse(Nil), y.toList, m.toList, d.toList, h.toList, min.toList)
       }
+      val timer: P[Timer] = offsetTimer | stdTimer
     }
 
     def parse(s: String): Timer = P(Parser.timer ~ End).parse(s) match {
