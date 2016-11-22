@@ -7,7 +7,8 @@ import java.time._
 import pill.config._
 
 package data {
-
+  case class Id(id: String)
+  
   case class JobParams(
     args: Seq[String] = Seq.empty,
     env: Map[String, String] = Map.empty,

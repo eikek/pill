@@ -7,6 +7,9 @@ import io.circe._, io.circe.generic.semiauto._
 import pill.data._
 
 object jsoncodec {
+  implicit val _idDecoder: Decoder[Id] = deriveDecoder[Id]
+  implicit val _idEncoder: Encoder[Id] = deriveEncoder[Id]
+
   implicit val _pathDecoder: Decoder[Path] = Decoder.decodeString.map(s => Paths.get(s))
   implicit val _pathEncoder: Encoder[Path] = Encoder.encodeString.contramap[Path](_.toString)
 

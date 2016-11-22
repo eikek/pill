@@ -26,6 +26,7 @@ package store {
     }
     def create(job: ScheduledJob): Result[Unit]
     def save(job: ScheduledJob): Result[Unit]
+    def rename(fromId: String, toId: String): Result[Unit]
     def load(id: String): Result[Option[ScheduledJob]]
     def delete(id: String): Result[ScheduledJob]
     def list(): Result[Vector[ScheduledJob]]
@@ -69,6 +70,18 @@ package store {
         _ <- mkdir(target.parent)
         _ <- job.asJson.spaces2 >>: target
       } yield ()
+    }
+
+    def rename(fromId: String, toId: String): Result[Unit] = {
+      val target = root/toId/jobFile
+      for {
+        _ <- mv(root/fromId, root/toId)
+        old <- load(toId).flatMap({
+          case Some(j) => Right(j)
+          case None => error("Could not load renamed job")
+        })
+        _ <- old.copy(id = toId).asJson.spaces2 >>: target
+      } yield () 
     }
 
     def load(id: String): Result[Option[ScheduledJob]] = {

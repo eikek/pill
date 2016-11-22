@@ -56,6 +56,12 @@ POST :base/api/jobs/myid
 }
 #
 
+# rename a job (change its id)
+POST :base/api/jobs/457f9c/rename
+Content-Type: application/json
+
+{ "id": "myid" }
+#
 
 # change job config only
 # has a separate endpoint to omit values

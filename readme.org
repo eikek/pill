@@ -297,6 +297,47 @@ Content-Type: application/json
 You can also put a new job to =api/jobs/:id=. Then you must give the
 complete job. The old one will be overridden.
 
+The id can be changed, too. You have to post a new id to the rename
+endpoint:
+
+#+begin_src restclient :exports both
+POST http://localhost:11350/api/jobs/457f9b/rename
+Content-Type: application/json
+
+{ "id": "my-id" }
+#+end_src
+
+#+RESULTS:
+#+BEGIN_SRC js
+{
+  "id": "my-id",
+  "job": {
+    "path": "/home/eike/backup.sh",
+    "params": {
+      "args": [],
+      "env": null,
+      "cwd": null
+    }
+  },
+  "config": {
+    "timer": "2016-*-* 12:00",
+    "mails": [],
+    "errorMails": [],
+    "runOnce": false,
+    "silent": false,
+    "active": true,
+    "keepRuns": null
+  }
+}
+// POST http://localhost:11350/api/jobs/457f9b/rename
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 217
+// Request duration: 0.005919s
+#+END_SRC
+
+It responds with the renamed job.
+
 ** Get run information
 
 You can see all the output of a job:

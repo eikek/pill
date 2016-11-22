@@ -38,7 +38,6 @@ package object cli {
 }
 
 package cli {
-  case class Id(id: String)
   case class JobChange(id: String, change: ScheduledJob => ScheduledJob)
   case class CleanRuns(id: String, keep: Int = 10)
   case class RunSelect(id: String, run: Int = 1)

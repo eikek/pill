@@ -24,6 +24,11 @@ object files {
       Files.createDirectory(p)
     }
 
+  def mv(s: Path, t: Path): Either[Exception, Unit] =
+    Either.catchOnly[Exception] {
+      Files.move(s, t)
+    }
+
   private def newFilter(f: Path => Boolean) = new DirectoryStream.Filter[Path] {
     def accept(p: Path) = f(p)
   }

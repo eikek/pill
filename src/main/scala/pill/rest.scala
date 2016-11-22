@@ -13,7 +13,7 @@ package rest {
 
     def service(store: JobStore, master: Master, onShutdown: () => Unit) = {
       val endpoint = {
-        jobList(store) :+: jobDetail(store) :+: jobParamsChange(store) :+:
+        jobList(store) :+: jobDetail(store) :+: jobParamsChange(store) :+: jobRename(store) :+:
         jobDelete(store) :+: jobNew(store) :+: jobCreate(store) :+: runDetail(store) :+:
         runList(store) :+: runDetailLatest(store) :+: runDelete(store)   :+:
         runDeleteAll(store) :+: masterToggle(master) :+: masterInfo(master) :+:
@@ -97,6 +97,18 @@ package rest {
             case None => Left(StoreError(s"Job '$id' not found"))
           })
           .map(Ok(_))
+          .valueOr(InternalServerError(_))
+      }
+
+    def jobRename(store: JobStore): Endpoint[ScheduledJob] =
+      post("api" :: "jobs" :: string :: "rename" :: body.as[Id]) {
+        (oldId: String, newId: Id) =>
+        store.rename(oldId, newId.id)
+          .flatMap(_ => store.load(newId.id))
+          .map({
+            case Some(j) => Ok(j)
+            case None => InternalServerError(new Exception("Rename did not work"))
+          })
           .valueOr(InternalServerError(_))
       }
 
