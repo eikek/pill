@@ -150,7 +150,7 @@ package cli {
                 case Script(path, _) => path.toString
                 case _:Code => "<code>"
               }
-              println(s"${j.id}\t ${j.config.timer.asString}\t$name")
+              println(s"${if (j.config.active) "✔" else "✘"} ${j.id}\t ${j.config.timer.asString}\t$name")
             }
           case Left(err) =>
             throw err
