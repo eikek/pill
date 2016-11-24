@@ -28,6 +28,7 @@ object Master extends StrictLogging {
   case class Toggle(active: Boolean) extends Message
   case object EvalTrigger extends Message
   case class JobDone(id: String) extends Message
+  case class RunNow(jobs: Seq[ScheduledJob]) extends Message
 
   def apply(getJobs: JobList, e: JobExecutor, continue: (ScheduledJob, JobRun, MasterInfo) => Unit): Master = {
     val m = new MasterImpl(getJobs, e, continue)
@@ -82,7 +83,7 @@ object Master extends StrictLogging {
     def send(msg: Master.Message): Unit = queue.offer(msg)
 
     def activeJobs(now: LocalDateTime, state: MasterInfo): ScheduledJob => Boolean =
-      sj => sj.config.shouldRun(now) && (!state.runningJobs.contains(sj.id))
+      sj => sj.config.shouldRun(now) && state.notRunning(sj)
 
     def run(msg: Message, state: MasterInfo): MasterInfo = {
       logger.trace(s"Got message $msg")
@@ -91,6 +92,11 @@ object Master extends StrictLogging {
           state.copy(active = active)
         case JobDone(id) =>
           state.copy(runningJobs = state.runningJobs - id)
+        case RunNow(jobs) =>
+          val notRunning = jobs.filter(state.notRunning)
+          logger.debug(s"Submitting ${notRunning.size} jobs")
+          submit(notRunning)
+          state.copy(runningJobs = state.runningJobs ++ notRunning.map(_.id))
         case EvalTrigger if state.active =>
           val now = LocalDateTime.now
           getJobs().map(_.filter(activeJobs(now, state))) match {

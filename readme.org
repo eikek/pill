@@ -339,6 +339,29 @@ Content-Type: application/json
 
 It responds with the renamed job.
 
+** Execute a job now
+
+A job can be executed immediately:
+
+#+name: job-execute
+#+begin_src restclient :exports both
+POST http://localhost:11350/api/jobs/3984a9/execute
+#+end_src
+
+#+RESULTS: job-execute
+#+BEGIN_SRC js
+{
+  "success": true,
+  "message": "Job 3984a9 executing."
+}
+// POST http://localhost:11350/api/jobs/3984a9/execute
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+// Content-Length: 50
+// Request duration: 0.314736s
+#+END_SRC
+
+
 ** Get run information
 
 You can see all the output of a job:
@@ -594,7 +617,7 @@ pill help
 
 #+RESULTS:
 #+begin_example
-pill v0.0.1-SNAPSHOT (dirty workingdir @ master/4919e5541) at 2016-11-19T23:57:37.220Z
+pill v0.0.1-SNAPSHOT (dirty workingdir @ master/3f172e8dc) at 2016-11-24T21:12:02.115Z
 
 … a simple job scheduler. It will execute your scripts periodically.
 It is controlled via REST and a basic command line interface is provided.
@@ -602,11 +625,13 @@ It is controlled via REST and a basic command line interface is provided.
 Commands:
 - change: Change properties of a scheduled job
 - clean-runs: Free disk space by removing old runs
+- execute: Execute the job now
 - info: Show some info about the master scheduler
 - last: Show details about last run
 - list: List all scheduled jobs
 - new: Schedule a new job
 - pause: Pause the master scheduler
+- rename: Rename a job
 - rm: Delete a scheduled job
 - run: Show details about any run
 - runs: List the runs of a job
@@ -642,6 +667,8 @@ Usage: new [options] <program> [<args...>]
   --silent <value>         Set the `silent' flag of a job
   --active <value>         Set the `active' flag on a job
   --keep <value>           How many of the last runs to keep
+  --id <value>             The job id to use. A random one is generated, if omitted
+  --env k1=v1,k2=v2...     Environment variables used for the job
   --wd <value>             The job's working directory
 
 Arguments:
@@ -728,6 +755,17 @@ pill change --timer '2016-*-* *:*' 320458
 
 #+RESULTS:
 : Updated.
+
+** execute a job now
+
+A job can be executed immediately
+
+#+begin_src shell :exports both :results verbatim
+pill execute 3984a9
+#+end_src
+
+#+RESULTS:
+: Job 3984a9 executing.
 
 ** List job runs
 

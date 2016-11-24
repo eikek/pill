@@ -14,8 +14,8 @@ package rest {
     def service(store: JobStore, master: Master, onShutdown: () => Unit) = {
       val endpoint = {
         jobList(store) :+: jobDetail(store) :+: jobParamsChange(store) :+: jobRename(store) :+:
-        jobDelete(store) :+: jobNew(store) :+: jobCreate(store) :+: runDetail(store) :+:
-        runList(store) :+: runDetailLatest(store) :+: runDelete(store)   :+:
+        jobDelete(store) :+: jobNew(store) :+: jobCreate(store) :+: jobExecute(store, master) :+:
+        runDetail(store) :+: runList(store) :+: runDetailLatest(store) :+: runDelete(store) :+:
         runDeleteAll(store) :+: masterToggle(master) :+: masterInfo(master) :+:
         shutdown(master, onShutdown) :+: jobConfigChange(store)
       }
@@ -127,6 +127,19 @@ package rest {
       delete("api" :: "jobs" :: string) { id: String =>
         store.delete(id)
           .map(Ok(_))
+          .valueOr(InternalServerError(_))
+      }
+
+    def jobExecute(store: JobStore, master: Master): Endpoint[Json] =
+      post("api" :: "jobs" :: string :: "execute") { id: String =>
+        store.load(id)
+          .map({
+            case Some(job) =>
+              master.send(Master.RunNow(Seq(job)))
+              Ok(Json.obj("success" -> Json.True, "message" -> Json.fromString(s"Job $id executing.")))
+            case None =>
+              BadRequest(new Exception(s"Job $id not found"))
+          })
           .valueOr(InternalServerError(_))
       }
 

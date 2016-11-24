@@ -12,6 +12,7 @@ object Main extends LazyLogging {
     new NewJobCmd,
     new JobDetailCmd,
     new JobListCmd,
+    new ExecuteJobCmd,
     new DeleteJobCmd,
     new ChangeJobCmd,
     new RenameJobCmd,

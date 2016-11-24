@@ -178,8 +178,10 @@ package data {
       "commit" -> pill.config.BuildInfo.commit,
       "buildTime" -> pill.config.BuildInfo.buildTime,
       "homepage" -> pill.config.BuildInfo.homepage.getOrElse("")
-    )
-  )
+    ))
+  {
+    def notRunning(job: ScheduledJob): Boolean = !runningJobs.contains(job.id)
+  }
 
   object MasterInfo {
     def localhostHostname = InetAddress.getLocalHost.getCanonicalHostName

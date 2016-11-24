@@ -221,6 +221,21 @@ package cli {
     }
   }
 
+  class ExecuteJobCmd extends Command[Id]("execute") with RunningServer {
+    val description = "Execute the job now"
+    val init = Id("")
+    def run(id: Id): Unit = {
+      val resp = httpApi(s"/jobs/${id.id}/execute").method("POST").asString
+      whenOk(resp) {
+        val msg = for {
+          map <- decode[Map[String, Json]](resp.body)
+          msg <- map("message").as[String]
+        } yield msg
+        println(msg.valueOr(ex => throw ex))
+      }
+    }
+  }
+
   class ChangeJobCmd extends Command[JobChange]("change") with RunningServer {
     val description = "Change properties of a scheduled job"
     val init: JobChange = JobChange("", identity)
