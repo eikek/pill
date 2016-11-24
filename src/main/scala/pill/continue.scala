@@ -55,7 +55,8 @@ package continue {
         render(job) +
         "\n\nThe result was:\n" +
         render(run)
-        val subject = s"Run ${run.run} of job ${job.id} on ${info.name}"
+        val status = if (run.result.returnCode == 0) "[Success]" else "[Failed]"
+        val subject = s"$status Run ${run.run} of job ${job.id} on ${info.name}"
         smtp.send(Message(rcpt, Config.master.smtp.mailfrom, subject, text))
           .logError(logger, "Error sending mail")
       }
