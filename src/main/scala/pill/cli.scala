@@ -42,6 +42,7 @@ package cli {
   case class CleanRuns(id: String, keep: Int = 10)
   case class RunSelect(id: String, run: Int = 1)
   case class Rename(from: String, to: String)
+  case class StartConfig(http: HttpSettings, daemon: Boolean = true)
 
   abstract class Command[C](val name: String)(implicit p: OptParser[C]) {
     def init: C
@@ -96,25 +97,28 @@ package cli {
     }
   }
 
-  class StartCmd extends Command[HttpSettings]("start") with LazyLogging {
+  class StartCmd extends Command[StartConfig]("start") with LazyLogging {
     val description = "Starts the master scheduler as daemon in background"
-    def init = Config.master.endpointFromFile
+    def init = StartConfig(Config.master.endpointFromFile
       .flatMap(_.map(Right(_)).getOrElse(Config.master.newEndpoint))
-      .valueOr(ex => throw ex)
+      .valueOr(ex => throw ex))
 
-    def run(cfg: HttpSettings) = {
-      if (!cfg.isBound) {
-        val d = new Daemon()
-        if (d.isDaemonized) {
-          d.init()
-        } else {
-          println(s"Starting server at ${cfg.hostAndPort}")
-          d.daemonize()
-          System.exit(0)
+    def run(cfg: StartConfig) = {
+      if (!cfg.http.isBound) {
+        if (cfg.daemon) {
+          val d = new Daemon()
+          if (d.isDaemonized) {
+            d.init()
+          } else {
+            println(s"Starting server at ${cfg.http.hostAndPort}")
+            d.daemonize()
+            System.exit(0)
+          }
         }
-        Server.start(cfg)
+        println(s"Starting server at ${cfg.http.hostAndPort}")
+        Server.start(cfg.http)
       } else {
-        println(s"Server already running at ${cfg.hostAndPort}")
+        println(s"Server already running at ${cfg.http.hostAndPort}")
       }
     }
   }
@@ -403,6 +407,7 @@ package cli {
       def idArg = arg[String]("<id>").required().text("The job id (required)")
       def idOpt = opt[String]("id") text("The job id to use. A random one is generated, if omitted")
       def pauseOpt = opt[Boolean]("active") required() text("Pause the master scheduler")
+      def noDaemonOpt = opt[Unit]("fg") text("Start server in foreground (don't fork)")
 
       def fromArg = arg[String]("<from>") required() text ("The job id to rename")
       def toArg = arg[String]("<to>") required() text ("The new job id")
@@ -414,6 +419,14 @@ package cli {
     })
 
     implicit val _unit: OptParser[Unit] = OptParser[Unit](_ => new Parser(""))
+
+    implicit val _startConfig: OptParser[StartConfig] = OptParser[StartConfig] {
+      name => new Parser[StartConfig](name) {
+        portOpt action { (p, cfg) => cfg.copy(http = cfg.http.copy(port = p)) }
+        hostOpt action { (h, cfg) => cfg.copy(http = cfg.http.copy(bindHost = h)) }
+        noDaemonOpt action { (_, cfg) => cfg.copy(daemon = false) }
+      }
+    }
 
     implicit val _httpSettings: OptParser[HttpSettings] = OptParser[HttpSettings] {
       name => new Parser[HttpSettings](name) {
