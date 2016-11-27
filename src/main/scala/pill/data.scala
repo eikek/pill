@@ -44,11 +44,11 @@ package data {
     hour: List[Int], minute: List[Int]) {
 
     lazy val asString: String = {
-      def str(l: List[Int]) = if (l.isEmpty) "*" else l.mkString(",")
+      def str(l: List[Int], s: Int = 2) = if (l.isEmpty) "*" else l.map(n => (s"%0${s}d").format(n)).mkString(",")
       val days =
         if (dow.isEmpty) ""
         else dow.map(_.getDisplayName(format.TextStyle.SHORT, Locale.ROOT)).mkString(",") + " "
-      days + str(year) +"-"+ str(month) +"-"+ str(day) +" "+ str(hour) +":"+ str(minute)
+      days + str(year, 4) +"-"+ str(month) +"-"+ str(day) +" "+ str(hour) +":"+ str(minute)
     }
 
     def triggeredNow = triggered(LocalDateTime.now)

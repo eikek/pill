@@ -13,8 +13,8 @@ class DataTest extends FlatSpec with Matchers {
   }
 
   it should "render correctly" in {
-    Timer.parse("Mon,Wed *-*-* 12:0").asString should be ("Mon,Wed *-*-* 12:0")
-    Timer.parse("2016-*-* 7:0").asString should be ("2016-*-* 7:0")
+    Timer.parse("Mon,Wed *-*-* 12:0").asString should be ("Mon,Wed *-*-* 12:00")
+    Timer.parse("2016-*-* 7:0").asString should be ("2016-*-* 07:00")
   }
 
   it should "calculate next trigger" in {
