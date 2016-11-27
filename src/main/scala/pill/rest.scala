@@ -13,11 +13,12 @@ package rest {
 
     def service(store: JobStore, master: Master, onShutdown: () => Unit) = {
       val endpoint = {
-        jobList(store) :+: jobDetail(store) :+: jobParamsChange(store) :+: jobRename(store) :+:
-        jobDelete(store) :+: jobNew(store) :+: jobCreate(store) :+: jobExecute(store, master) :+:
+        jobList(store) :+: jobDetail(store) :+: jobParamsChange(store) :+:
+        jobConfigChange(store, master) :+: jobRename(store) :+: jobDelete(store, master) :+:
+        jobNew(store, master) :+: jobCreate(store, master) :+: jobExecute(store, master) :+:
         runDetail(store) :+: runList(store) :+: runDetailLatest(store) :+: runDelete(store) :+:
         runDeleteAll(store) :+: masterToggle(master) :+: masterInfo(master) :+:
-        shutdown(master, onShutdown) :+: jobConfigChange(store)
+        shutdown(master, onShutdown)
       }
 
       endpoint.toServiceAs[Application.Json]
@@ -42,19 +43,24 @@ package rest {
     def changeParams: Endpoint[JobParams => JobParams] =
       body.as[JobParams => JobParams]
 
-    def jobCreate(store: JobStore): Endpoint[ScheduledJob] =
+    def jobCreate(store: JobStore, master: Master): Endpoint[ScheduledJob] =
       post("api" :: "jobs" :: postedJob) { in: ScheduledJob =>
         store.save(in)
           .map(_ => Created(in))
+          .map(reload(master))
           .valueOr(InternalServerError(_))
       }
 
-    def jobNew(store: JobStore): Endpoint[ScheduledJob] =
+    def reload[A](master: Master): A => A =
+      a => { master.reload(); a }
+
+    def jobNew(store: JobStore, master: Master): Endpoint[ScheduledJob] =
       post("api" :: "jobs" :: string :: body.as[String => ScheduledJob]) {
         (id: String, job: String => ScheduledJob) =>
         val j = job(id)
         store.create(j)
           .map(_ => Created(j))
+          .map(reload(master))
           .valueOr(InternalServerError(_))
       }
 
@@ -86,7 +92,7 @@ package rest {
           .valueOr(InternalServerError(_))
       }
 
-    def jobConfigChange(store: JobStore): Endpoint[ScheduledJob] =
+    def jobConfigChange(store: JobStore, master: Master): Endpoint[ScheduledJob] =
       put("api" :: "jobs" :: string :: "config" :: changedJobConf) {
         (id: String, change: JobConf => JobConf) =>
 
@@ -97,6 +103,7 @@ package rest {
             case None => Left(StoreError(s"Job '$id' not found"))
           })
           .map(Ok(_))
+          .map(reload(master))
           .valueOr(InternalServerError(_))
       }
 
@@ -112,21 +119,26 @@ package rest {
           .valueOr(InternalServerError(_))
       }
 
-    def jobChange(store: JobStore): Endpoint[ScheduledJob] =
+    def jobChange(store: JobStore, master: Master): Endpoint[ScheduledJob] =
       put("api" :: "jobs" :: string :: body.as[ScheduledJob]) {
         (id: String, j: ScheduledJob) =>
 
         if (id == j.id) {
-          store.save(j).map(_ => Ok(j)).valueOr(InternalServerError(_))
+          store
+            .save(j)
+            .map(_ => Ok(j))
+            .map(reload(master))
+            .valueOr(InternalServerError(_))
         } else {
           BadRequest(new Exception("Job ids don't match"))
         }
       }
 
-    def jobDelete(store: JobStore): Endpoint[ScheduledJob] =
+    def jobDelete(store: JobStore, master: Master): Endpoint[ScheduledJob] =
       delete("api" :: "jobs" :: string) { id: String =>
         store.delete(id)
           .map(Ok(_))
+          .map(reload(master))
           .valueOr(InternalServerError(_))
       }
 

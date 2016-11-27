@@ -15,6 +15,7 @@ trait Master {
   def info: MasterInfo
   def send(msg: Master.Message): Unit
 
+  def reload(): Unit = send(Master.EvalTrigger)
   def toggle(active: Boolean): Unit = send(Master.Toggle(active))
   def shutdown(): Unit = send(Master.Shutdown)
   def awaitTermination(wait: FiniteDuration): Unit
@@ -42,6 +43,11 @@ object Master extends StrictLogging {
     private[this] val state = new atomic.AtomicReference(MasterInfo.started)
     private[this] val shutdownLatch = new CountDownLatch(1)
 
+    implicit val ldtOrd = new Ordering[LocalDateTime] {
+      def compare(x: LocalDateTime, y: LocalDateTime): Int =
+        if (x.isBefore(y)) -1 else if (x.isAfter(y)) 1 else 0
+    }
+
     def start(): Unit = {
       if (!state.get.running) {
         logger.info("Starting master job …")
@@ -49,27 +55,45 @@ object Master extends StrictLogging {
           def newThread(r: Runnable): Thread = {
             val t = Executors.defaultThreadFactory().newThread(r)
             t.setDaemon(true)
+            t.setName("pill-scheduler")
             t
           }
         })
-        val schedule = scheduler.scheduleAtFixedRate(new Runnable() {
-          def run: Unit = queue.offer(EvalTrigger)
-        }, 1, 1, TimeUnit.MINUTES)
+        def schedule(msg: Message, at: Instant): ScheduledFuture[Message] = {
+          val delay = math.max(500, at.toEpochMilli - Instant.now.toEpochMilli)
+          logger.debug(s"Scheduling next run on: $at (in ${delay}ms)")
+          scheduler.schedule(new Callable[Message]() {
+            def call(): Message = {
+              queue.offer(msg)
+              msg
+            }
+          }, delay, TimeUnit.MILLISECONDS)
+        }
 
         Future {
           state.set(state.get.copy(running = true))
           logger.info("Master job running.")
+          var next = schedule(EvalTrigger, state.get.nextRun)
           while (state.get.running) {
             queue.take() match {
               case Shutdown =>
                 logger.info("Shutting down master job …")
-                schedule.cancel(false)
+                next.cancel(true)
                 scheduler.shutdownNow()
                 state.set(state.get.copy(running = false))
                 scheduler.awaitTermination(10, TimeUnit.SECONDS)
                 shutdownLatch.countDown()
               case msg =>
-                state.set(self.run(msg, state.get))
+                Either.catchOnly[Exception](self.run(msg, state.get)) match {
+                  case Right(nextState) =>
+                    if (state.get.nextRun != nextState.nextRun) {
+                      next.cancel(true)
+                      next = schedule(EvalTrigger, nextState.nextRun)
+                    }
+                    state.set(nextState)
+                  case Left(err) =>
+                    logger.error("Internal error in `run'", err)
+                }
             }
           }
         }
@@ -86,7 +110,7 @@ object Master extends StrictLogging {
       sj => sj.config.shouldRun(now) && state.notRunning(sj)
 
     def run(msg: Message, state: MasterInfo): MasterInfo = {
-      logger.trace(s"Got message $msg")
+      logger.trace(s"Got message $msg (active=${state.active})")
       msg match {
         case Toggle(active) =>
           state.copy(active = active)
@@ -99,11 +123,18 @@ object Master extends StrictLogging {
           state.copy(runningJobs = state.runningJobs ++ notRunning.map(_.id))
         case EvalTrigger if state.active =>
           val now = LocalDateTime.now
-          getJobs().map(_.filter(activeJobs(now, state))) match {
+          getJobs() match {
             case Right(jobs) =>
-              logger.debug(s"Submitting ${jobs.size} jobs")
-              submit(jobs)
-              state.copy(runningJobs = state.runningJobs ++ jobs.map(_.id))
+              val submitJobs = jobs.filter(activeJobs(now, state))
+              logger.debug(s"Submitting ${submitJobs.size} jobs")
+              submit(submitJobs)
+              jobs.flatMap(_.config.timer.nextTrigger(now).toList) match {
+                case ts if ts.isEmpty =>
+                  state.copy(runningJobs = state.runningJobs ++ submitJobs.map(_.id))
+                case ts =>
+                  val nextRun = ts.min.atZone(ZoneId.systemDefault).toInstant
+                  state.copy(runningJobs = state.runningJobs ++ submitJobs.map(_.id), nextRun = nextRun)
+              }
             case Left(error) =>
               logger.error("Error getting jobs", error)
               state

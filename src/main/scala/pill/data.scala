@@ -4,6 +4,7 @@ import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 import java.util.{Locale, UUID}
 import java.time._
+import cats.syntax.either._
 import pill.config._
 
 package data {
@@ -39,11 +40,11 @@ package data {
 
   // Thu,Fri 2012-*-1,5 11:12:13
   case class Timer(dow: List[DayOfWeek],
-    year: List[String], month: List[String], day: List[String],
-    hour: List[String], minute: List[String]) {
+    year: List[Int], month: List[Int], day: List[Int],
+    hour: List[Int], minute: List[Int]) {
 
     lazy val asString: String = {
-      def str(l: List[String]) = if (l.isEmpty) "*" else l.mkString(",")
+      def str(l: List[Int]) = if (l.isEmpty) "*" else l.mkString(",")
       val days =
         if (dow.isEmpty) ""
         else dow.map(_.getDisplayName(format.TextStyle.SHORT, Locale.ROOT)).mkString(",") + " "
@@ -62,12 +63,31 @@ package data {
       check(hour.map(_.toInt), now.getHour) &&
       check(minute.map(_.toInt), now.getMinute)
     }
+
+    def nextTimers(startYear: Int): Stream[LocalDateTime] = {
+      val comb = for {
+        y <- if (year.isEmpty) Stream.from(startYear) else year.toStream
+        m <- if (month.isEmpty) (1 to 12) else month
+        d <- if (day.isEmpty) (1 to 31) else day
+        h <- if (hour.isEmpty) (0 to 59) else hour
+        min <- if (minute.isEmpty) (0 to 59) else minute
+      } yield (y, m, d, h, min)
+      //filter out invalid dates
+      val dates = comb.flatMap({
+        case (y,m,d,h,min) => Timer.localDateTime(y,m,d,h,min).toStream
+      })
+      if (dow.isEmpty) dates
+      else dates.filter(ld => dow.contains(ld.getDayOfWeek))
+    }
+
+    def nextTrigger(ref: LocalDateTime): Option[LocalDateTime] = 
+      nextTimers(ref.getYear).find(_ isAfter ref) 
   }
 
   object Timer {
     import fastparse.all._
     private object Parser {
-      val empty: P[Seq[String]] = P("*").map(_ => Nil)
+      val empty: P[Seq[Int]] = P("*").map(_ => Nil)
       val dow: P[DayOfWeek] =
         P("Mon").map(_ => DayOfWeek.MONDAY) |
         P("Tue").map(_ => DayOfWeek.TUESDAY) |
@@ -78,10 +98,10 @@ package data {
         P("Sun").map(_ => DayOfWeek.SUNDAY)
   
       val dows: P[Seq[DayOfWeek]] = dow.rep(1, sep=",")
-      val yearSingle: P[String] = CharIn('0' to '9').rep(4).!
-      val years: P[Seq[String]] = P(empty | yearSingle.rep(1, sep=","))
-      val two: P[String] = CharIn('0' to '9').rep(min=1, max=2).!
-      val twos: P[Seq[String]] = P(empty | two.rep(1, sep=","))
+      val yearSingle: P[Int] = CharIn('0' to '9').rep(4).!.map(_.toInt)
+      val years: P[Seq[Int]] = P(empty | yearSingle.rep(1, sep=","))
+      val two: P[Int] = CharIn('0' to '9').rep(min=1, max=2).!.map(_.toInt)
+      val twos: P[Seq[Int]] = P(empty | two.rep(1, sep=","))
 
       val offset: P[Duration] = P("+" ~ P(CharIn('0' to '9').rep.!).map(_.toInt) ~ P("min"|"h"|"d"|"m").!).map {
         case (num, unit) => unit.toLowerCase match {
@@ -93,15 +113,18 @@ package data {
       }
       val offsetTimer: P[Timer] = offset.map { duration =>
         val now = LocalDateTime.now.plus(duration)
-        Timer(Nil, List(now.getYear.toString),
-          List(now.getMonthValue.toString),
-          List(now.getDayOfMonth.toString),
-          List(now.getHour.toString),
-          List(now.getMinute.toString))
+        Timer(Nil, List(now.getYear),
+          List(now.getMonthValue),
+          List(now.getDayOfMonth),
+          List(now.getHour),
+          List(now.getMinute))
       }
 
       val stdTimer: P[Timer] = P((dows ~" ").? ~ years ~ "-" ~ twos ~"-"~ twos ~" "~ twos ~":"~ twos).map {
-        case (w, y, m, d, h, min) => Timer(w.map(_.toList).getOrElse(Nil), y.toList, m.toList, d.toList, h.toList, min.toList)
+        case (w, y, m, d, h, min) => Timer(
+          w.map(_.toList.sorted).getOrElse(Nil),
+          y.toList.sorted, m.toList.sorted, d.toList.sorted,
+          h.toList.sorted, min.toList.sorted)
       }
       val timer: P[Timer] = offsetTimer | stdTimer
     }
@@ -110,6 +133,9 @@ package data {
       case fastparse.core.Parsed.Success(c, _) => c
       case f => sys.error(f.toString)
     }
+
+    def localDateTime(year: Int, month: Int, day: Int, hour: Int, minute: Int): Option[LocalDateTime] =
+      Either.catchOnly[DateTimeException](LocalDateTime.of(year, month, day, hour, minute)).toOption
 
     lazy val always = Timer.parse("*-*-* *:*")
   }
@@ -172,6 +198,7 @@ package data {
     started: Instant,
     name: String,
     runningJobs: Set[String],
+    nextRun: Instant = Instant.now,
     buildInfo: Map[String, String] = Map(
       "projectName" -> pill.config.BuildInfo.projectName,
       "version" -> pill.config.BuildInfo.version,
