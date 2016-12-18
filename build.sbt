@@ -1,7 +1,7 @@
 import libs._
 
 name := "pill"
-version := "0.0.1-SNAPSHOT"
+version := "0.0.1"
 scalaVersion := `scala-version`
 homepage := Option(url("https://github.com/eikek/pill"))
 
