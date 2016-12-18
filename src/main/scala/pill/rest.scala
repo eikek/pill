@@ -35,13 +35,13 @@ package rest {
     })
 
     def postedJob: Endpoint[ScheduledJob] =
-      body.as[String => ScheduledJob].map(_(ScheduledJob.makeId))
+      jsonBody[String => ScheduledJob].map(_(ScheduledJob.makeId))
 
     def changedJobConf: Endpoint[JobConf => JobConf] =
-      body.as[JobConf => JobConf]
+      jsonBody[JobConf => JobConf]
 
     def changeParams: Endpoint[JobParams => JobParams] =
-      body.as[JobParams => JobParams]
+      jsonBody[JobParams => JobParams]
 
     def jobCreate(store: JobStore, master: Master): Endpoint[ScheduledJob] =
       post("api" :: "jobs" :: postedJob) { in: ScheduledJob =>
@@ -55,7 +55,7 @@ package rest {
       a => { master.reload(); a }
 
     def jobNew(store: JobStore, master: Master): Endpoint[ScheduledJob] =
-      post("api" :: "jobs" :: string :: body.as[String => ScheduledJob]) {
+      post("api" :: "jobs" :: string :: jsonBody[String => ScheduledJob]) {
         (id: String, job: String => ScheduledJob) =>
         val j = job(id)
         store.create(j)
@@ -108,7 +108,7 @@ package rest {
       }
 
     def jobRename(store: JobStore): Endpoint[ScheduledJob] =
-      post("api" :: "jobs" :: string :: "rename" :: body.as[Id]) {
+      post("api" :: "jobs" :: string :: "rename" :: jsonBody[Id]) {
         (oldId: String, newId: Id) =>
         store.rename(oldId, newId.id)
           .flatMap(_ => store.load(newId.id))
@@ -120,7 +120,7 @@ package rest {
       }
 
     def jobChange(store: JobStore, master: Master): Endpoint[ScheduledJob] =
-      put("api" :: "jobs" :: string :: body.as[ScheduledJob]) {
+      put("api" :: "jobs" :: string :: jsonBody[ScheduledJob]) {
         (id: String, j: ScheduledJob) =>
 
         if (id == j.id) {
@@ -187,7 +187,7 @@ package rest {
       }
 
     def masterToggle(m: Master): Endpoint[MasterToggle] =
-      put("api" :: "master" :: body.as[MasterToggle]) { toggle: MasterToggle =>
+      put("api" :: "master" :: jsonBody[MasterToggle]) { toggle: MasterToggle =>
         val old = MasterToggle(m.info.active)
         m.toggle(toggle.active)
         Ok(old)
