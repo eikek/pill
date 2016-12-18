@@ -41,10 +41,6 @@ sbt gen-zip
 The zip can be found in the =target= folder. Unpack it an run the
 =pill= executable. Prebuild zips are available [[https://eknet.org/main/projects/pill/pill-0.0.1-SNAPSHOT.zip][here]].
 
-/Note/ currently the build fails, because it expects a very recent
-version of [[https://github.com/finagle/finch][finch]]. You must first clone [[https://github.com/finagle/finch][finch]] and run =sbt
-publishLocal= before building pill.
-
 * REST interface
 
 The master is controlled via a REST interface.

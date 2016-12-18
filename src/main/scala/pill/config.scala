@@ -1,5 +1,6 @@
 package pill
 
+import scala.util.Try
 import java.nio.file.{Path, Paths}
 import pureconfig._, pureconfig.ConfigConvert._
 import cats.syntax.either._
@@ -51,8 +52,12 @@ package config {
   }
 
   object Config {
-    implicit private val deriveStringConvertForPath = fromString[Path](s => Paths.get(s).absolute)
-    implicit private val deriveStringConvertForMail = fromString[Mail](s => Mail(s))
+    implicit private val _pathConvert = stringConvert[Path](
+      s => Try(Paths.get(s).absolute),
+      p => p.toString)
+    implicit private val _mailConvert = stringConvert[Mail](
+      s => Try(Mail(s)),
+      mail => mail.address)
 
     val defaultConfigFile = home/".config"/"pill"/"pill.conf"
 
